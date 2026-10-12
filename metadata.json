@@ -1,0 +1,7 @@
+{
+  "name": "Dispenser Bench-Test Controller (Android)",
+  "description": "Native Android app (Jetpack Compose & Material 3) and interactive bench test suite for ESP8266 3-day dispenser hardware prototype over Bluetooth Classic HC-05 SPP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

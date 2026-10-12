@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Dispenser Bench Test</string>
+    <string name="prototype_disclaimer">HARDWARE PROTOTYPE ONLY: BENCH TEST WITH INERT ITEMS ONLY (e.g. beads, dry beans). NOT FOR MEDICATION USE.</string>
+    <string name="tab_connect">Connect</string>
+    <string name="tab_schedule">Schedule</string>
+    <string name="tab_bench_test">Bench Test</string>
+</resources>
