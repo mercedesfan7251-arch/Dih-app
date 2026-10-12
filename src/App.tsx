@@ -268,7 +268,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden sm:block">
-                3-Day &bull; 9-Slot Bluetooth Schedule &amp; Servo Test Suite (Inert Items Only)
+                3-Day &bull; 9-Slot Bluetooth Schedule Controller (Inert Items Only)
               </p>
             </div>
           </div>

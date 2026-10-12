@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Bluetooth,
   BluetoothOff,
   Calendar,
-  Wrench,
   CheckCircle,
   AlertTriangle,
   Clock,
@@ -11,7 +10,6 @@ import {
   Send,
   Save,
   RotateCw,
-  Play,
   Info,
   Radio,
   XCircle,
@@ -44,7 +42,7 @@ interface AndroidEmulatorProps {
   onDisconnect: () => void;
   onSendSchedule: (slots: { slot: string; time: string }[]) => void;
   onReadBackState: () => void;
-  onTestServo: (slot: string) => void;
+  onTestServo?: (slot: string) => void;
   lastAck: { id: string; ok: boolean; cmd?: string; revision?: number; error?: string; timestamp: string } | null;
   slots: EmulatorSlot[];
   onUpdateSlotTime: (slotId: string, newTime: string) => void;
@@ -68,8 +66,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   deviceSyncedState,
   activeActuatingServo
 }) => {
-  const [activeTab, setActiveTab] = useState<'schedule' | 'bench' | 'connect'>('schedule');
-  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'schedule' | 'connect'>('schedule');
   const [editingSlot, setEditingSlot] = useState<EmulatorSlot | null>(null);
   const [editHour, setEditHour] = useState('08');
   const [editMin, setEditMin] = useState('00');
@@ -141,12 +138,6 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
     await onConnectRealBluetooth();
   };
 
-  const getSlotForServo = (servoNum: number) => {
-    if (servoNum === 1) return 'D1_MORNING';
-    if (servoNum === 2) return 'D2_MORNING';
-    return 'D3_MORNING';
-  };
-
   return (
     <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 text-white shadow-xl space-y-5">
       {/* Friendly Header with Tabs */}
@@ -156,7 +147,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
             Dispenser Bench-Test Controller
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Configure 9 generic test slots (3 days &times; 3 periods) and test dispenser servos with inert items
+            Configure 9 generic test schedule slots (3 days &times; 3 periods) to sync with HC-05
           </p>
         </div>
 
@@ -172,18 +163,6 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
           >
             <Calendar className="w-4 h-4" />
             <span>Schedule</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('bench')}
-            className={`px-3.5 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
-              activeTab === 'bench'
-                ? 'bg-blue-600 text-white font-bold shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            <span>Test Servos</span>
           </button>
 
           <button
@@ -474,86 +453,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
         </div>
       )}
 
-      {/* TAB 2: BENCH TEST (SERVOS) */}
-      {activeTab === 'bench' && (
-        <div className="space-y-4">
-          <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
-            <div>
-              <h3 className="font-bold text-sm text-white">
-                Servo Actuation Bench Test
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Deliberately actuate one servo at a time to test mechanical movement and alignment
-              </p>
-            </div>
-
-            {/* Safety Checkbox */}
-            <label className="flex items-start space-x-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={safetyConfirmed}
-                onChange={e => setSafetyConfirmed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-700 bg-slate-950 focus:ring-0 cursor-pointer"
-              />
-              <span className="text-slate-300 text-xs leading-relaxed">
-                <strong>Safety Confirmation:</strong> I confirm this is a bench-test prototype loaded only with inert test materials (e.g. plastic pellets or dry beans). Hands and fingers are clear of moving gears.
-              </span>
-            </label>
-
-            {/* 3 Dedicated Servo Test Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[1, 2, 3].map(servoNum => {
-                const isActuating = activeActuatingServo === servoNum;
-                return (
-                  <div
-                    key={servoNum}
-                    className={`bg-slate-900 p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
-                      isActuating
-                        ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
-                        : 'border-slate-800'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-white">Servo {servoNum}</span>
-                        <span className="text-xs text-blue-400 bg-slate-950 px-2 py-0.5 rounded">
-                          Day {servoNum}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Status: {isActuating ? 'Moving (90°)...' : 'Parked (0°)'}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => onTestServo(getSlotForServo(servoNum))}
-                      disabled={!isConnected || !safetyConfirmed || activeActuatingServo !== null}
-                      className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
-                        !isConnected || !safetyConfirmed || activeActuatingServo !== null
-                          ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                          : isActuating
-                          ? 'bg-amber-500 text-slate-950 animate-pulse'
-                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md cursor-pointer'
-                      }`}
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      <span>{isActuating ? 'Moving...' : `Test Servo ${servoNum}`}</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {!isConnected && (
-              <p className="text-xs text-slate-500 text-center">
-                Connect your HC-05 Bluetooth hardware to actuate servos.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: BLUETOOTH SETUP & HARDWARE DETECTION */}
+      {/* TAB 2: BLUETOOTH SETUP & HARDWARE DETECTION */}
       {activeTab === 'connect' && (
         <div className="space-y-4">
           <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
