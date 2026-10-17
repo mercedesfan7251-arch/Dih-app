@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bluetooth,
   BluetoothOff,
   Calendar,
+  Wrench,
   CheckCircle,
   AlertTriangle,
   Clock,
@@ -10,6 +11,8 @@ import {
   Send,
   Save,
   RotateCw,
+  Play,
+  Download,
   Info,
   Radio,
   XCircle,
@@ -35,27 +38,32 @@ export interface BluetoothHardwareInfo {
 
 interface AndroidEmulatorProps {
   isConnected: boolean;
+  isSimulationMode: boolean;
   isConnecting: boolean;
   deviceRevision: number;
   bluetoothInfo: BluetoothHardwareInfo;
   onConnectRealBluetooth: () => Promise<void>;
+  onStartSimulation: () => void;
   onDisconnect: () => void;
   onSendSchedule: (slots: { slot: string; time: string }[]) => void;
   onReadBackState: () => void;
-  onTestServo?: (slot: string) => void;
+  onTestServo: (slot: string) => void;
   lastAck: { id: string; ok: boolean; cmd?: string; revision?: number; error?: string; timestamp: string } | null;
   slots: EmulatorSlot[];
   onUpdateSlotTime: (slotId: string, newTime: string) => void;
   deviceSyncedState: { isSynced: boolean; mismatches: string[] } | null;
   activeActuatingServo: number | null;
+  onOpenApkTab: () => void;
 }
 
 export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   isConnected,
+  isSimulationMode,
   isConnecting,
   deviceRevision,
   bluetoothInfo,
   onConnectRealBluetooth,
+  onStartSimulation,
   onDisconnect,
   onSendSchedule,
   onReadBackState,
@@ -64,9 +72,11 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   slots,
   onUpdateSlotTime,
   deviceSyncedState,
-  activeActuatingServo
+  activeActuatingServo,
+  onOpenApkTab
 }) => {
-  const [activeTab, setActiveTab] = useState<'schedule' | 'connect'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'bench' | 'connect'>('schedule');
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [editingSlot, setEditingSlot] = useState<EmulatorSlot | null>(null);
   const [editHour, setEditHour] = useState('08');
   const [editMin, setEditMin] = useState('00');
@@ -138,6 +148,12 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
     await onConnectRealBluetooth();
   };
 
+  const getSlotForServo = (servoNum: number) => {
+    if (servoNum === 1) return 'D1_MORNING';
+    if (servoNum === 2) return 'D2_MORNING';
+    return 'D3_MORNING';
+  };
+
   return (
     <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 text-white shadow-xl space-y-5">
       {/* Friendly Header with Tabs */}
@@ -147,7 +163,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
             Dispenser Bench-Test Controller
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Configure 9 generic test schedule slots (3 days &times; 3 periods) to sync with HC-05
+            Configure 9 generic test slots (3 days &times; 3 periods) and test dispenser servos with inert items
           </p>
         </div>
 
@@ -163,6 +179,18 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
           >
             <Calendar className="w-4 h-4" />
             <span>Schedule</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('bench')}
+            className={`px-3.5 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
+              activeTab === 'bench'
+                ? 'bg-blue-600 text-white font-bold shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Wrench className="w-4 h-4" />
+            <span>Test Servos</span>
           </button>
 
           <button
@@ -191,8 +219,25 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
               <p className="text-red-200/90 leading-relaxed">
                 {bluetoothInfo.reason || 'No Bluetooth adapter or Bluetooth Classic serial support detected on this device.'}
                 {' '}The HC-05 hardware module communicates over <strong>Bluetooth Classic RFCOMM (SPP)</strong>. 
-                Please enable Bluetooth on this computer or connect a USB Bluetooth adapter to link with the HC-05 module.
+                To test with physical hardware, download the <strong>Android APK package</strong> and install it on an Android phone that has Bluetooth.
               </p>
+              <div className="pt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={onOpenApkTab}
+                  className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Get Android APK Package</span>
+                </button>
+                {!isConnected && (
+                  <button
+                    onClick={onStartSimulation}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Try Offline Simulation Mode
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -204,7 +249,9 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
           <div
             className={`w-3.5 h-3.5 rounded-full shrink-0 ${
               isConnected
-                ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                ? isSimulationMode
+                  ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
+                  : 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
                 : isConnecting
                 ? 'bg-blue-400 animate-pulse'
                 : 'bg-slate-600'
@@ -214,20 +261,29 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
             <div className="font-bold text-sm text-slate-200 flex items-center space-x-2">
               <span>
                 {isConnected
-                  ? 'Physical Bluetooth Connected (HC-05)'
+                  ? isSimulationMode
+                    ? 'Offline Simulation Mode (Virtual Hardware)'
+                    : 'Physical Bluetooth Connected (HC-05)'
                   : isConnecting
                   ? 'Connecting to Bluetooth...'
                   : bluetoothInfo.hasHardware
                   ? 'Bluetooth Disconnected • No Device Linked'
                   : 'Disconnected • Device Lacks Bluetooth'}
               </span>
+              {isSimulationMode && (
+                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  SIMULATION
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400">
               {isConnected
-                ? 'Connected to physical HC-05 module over Bluetooth Classic Serial.'
+                ? isSimulationMode
+                  ? 'Actions are simulated in software. No physical Bluetooth is currently linked.'
+                  : 'Connected to physical HC-05 module over Bluetooth Classic Serial.'
                 : bluetoothInfo.hasHardware
-                ? 'Bluetooth radio detected on this device. Click Connect to link with your HC-05 module.'
-                : 'This device lacks Bluetooth hardware. A Bluetooth radio adapter is required to connect.'}
+                ? 'Bluetooth radio detected on this device. Click Connect to link with your HC-05.'
+                : 'This device does not have Bluetooth. Use the Android APK on a phone to connect.'}
             </p>
           </div>
         </div>
@@ -250,9 +306,17 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
                 >
                   <BluetoothOff className="w-4 h-4 text-red-400" />
-                  <span>Device Lacks Bluetooth</span>
+                  <span>Connect Device (Check BT)</span>
                 </button>
               )}
+
+              <button
+                onClick={onStartSimulation}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl font-medium text-xs cursor-pointer transition-colors"
+                title="Test controls in software without hardware"
+              >
+                Offline Demo
+              </button>
             </>
           ) : (
             <button
@@ -262,6 +326,14 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
               Disconnect
             </button>
           )}
+
+          <button
+            onClick={onOpenApkTab}
+            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-3.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download APK</span>
+          </button>
         </div>
       </div>
 
@@ -372,7 +444,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
             <div className="text-xs text-slate-400">
               {isConnected
                 ? 'Ready to transmit 9 time slots to dispenser microcontroller.'
-                : 'Connect to HC-05 over Bluetooth to transmit schedule.'}
+                : 'Connect Bluetooth or run offline demo to transmit schedule.'}
             </div>
 
             <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -453,7 +525,86 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
         </div>
       )}
 
-      {/* TAB 2: BLUETOOTH SETUP & HARDWARE DETECTION */}
+      {/* TAB 2: BENCH TEST (SERVOS) */}
+      {activeTab === 'bench' && (
+        <div className="space-y-4">
+          <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
+            <div>
+              <h3 className="font-bold text-sm text-white">
+                Servo Actuation Bench Test
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Deliberately actuate one servo at a time to test mechanical movement and alignment
+              </p>
+            </div>
+
+            {/* Safety Checkbox */}
+            <label className="flex items-start space-x-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={safetyConfirmed}
+                onChange={e => setSafetyConfirmed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-700 bg-slate-950 focus:ring-0 cursor-pointer"
+              />
+              <span className="text-slate-300 text-xs leading-relaxed">
+                <strong>Safety Confirmation:</strong> I confirm this is a bench-test prototype loaded only with inert test materials (e.g. plastic pellets or dry beans). Hands and fingers are clear of moving gears.
+              </span>
+            </label>
+
+            {/* 3 Dedicated Servo Test Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[1, 2, 3].map(servoNum => {
+                const isActuating = activeActuatingServo === servoNum;
+                return (
+                  <div
+                    key={servoNum}
+                    className={`bg-slate-900 p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
+                      isActuating
+                        ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                        : 'border-slate-800'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-white">Servo {servoNum}</span>
+                        <span className="text-xs text-blue-400 bg-slate-950 px-2 py-0.5 rounded">
+                          Day {servoNum}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Status: {isActuating ? 'Moving (90°)...' : 'Parked (0°)'}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => onTestServo(getSlotForServo(servoNum))}
+                      disabled={!isConnected || !safetyConfirmed || activeActuatingServo !== null}
+                      className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
+                        !isConnected || !safetyConfirmed || activeActuatingServo !== null
+                          ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                          : isActuating
+                          ? 'bg-amber-500 text-slate-950 animate-pulse'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md cursor-pointer'
+                      }`}
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{isActuating ? 'Moving...' : `Test Servo ${servoNum}`}</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {!isConnected && (
+              <p className="text-xs text-slate-500 text-center">
+                Connect your Bluetooth hardware or start offline demo to actuate servos.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: BLUETOOTH SETUP & HARDWARE DETECTION */}
       {activeTab === 'connect' && (
         <div className="space-y-4">
           <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
@@ -491,11 +642,19 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
               <h4 className="font-bold text-white text-xs">How to connect to HC-05:</h4>
               <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300">
                 <li>Power on your ESP8266 and HC-05 board (red LED blinks rapidly).</li>
-                <li>On your computer or phone, pair with <strong>HC-05</strong> (Default PIN: <code>1234</code> or <code>0000</code>).</li>
-                <li>Click <strong>Connect HC-05 Device</strong> above to select the paired serial COM port or Bluetooth device.</li>
-                <li>Once connected, time schedules and servo test commands will stream directly to the microcontroller.</li>
+                <li>On your phone, go to <strong>Android Settings &rarr; Bluetooth</strong> and pair with <strong>HC-05</strong> (PIN: <code>1234</code>).</li>
+                <li>Open the <strong>Dispenser Bench Test Android App</strong> on your phone.</li>
+                <li>Select HC-05 from the paired device list and tap <strong>Connect</strong>.</li>
               </ol>
             </div>
+
+            <button
+              onClick={onOpenApkTab}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-3 rounded-xl flex items-center space-x-2 cursor-pointer shadow-md transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Android APK Package</span>
+            </button>
           </div>
         </div>
       )}
@@ -511,23 +670,33 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
               <div className="space-y-1">
                 <h3 className="font-bold text-base text-white">This Device Lacks Bluetooth</h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Bluetooth hardware was not detected on this device. The HC-05 module communicates over physical Bluetooth Classic (RFCOMM/SPP) radio.
+                  Bluetooth hardware was not detected on this machine. You cannot establish a Bluetooth connection to the HC-05 module from this device.
                 </p>
               </div>
             </div>
 
             <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1.5 leading-relaxed">
               <p>
-                <strong>Hardware Requirement:</strong> To establish a connection with the HC-05 module, you will need a device with an internal Bluetooth adapter or a plug-in USB Bluetooth dongle.
+                <strong>Solution:</strong> Download the <strong>Android APK package</strong> and install it on an Android phone that has Bluetooth. The phone connects directly to the HC-05 over Bluetooth Classic.
               </p>
             </div>
 
-            <div className="flex pt-2">
+            <div className="flex space-x-2 pt-2">
               <button
                 onClick={() => setShowNoBluetoothModal(false)}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 cursor-pointer transition-colors"
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-bold text-xs hover:bg-slate-800 cursor-pointer"
               >
-                Understood
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setShowNoBluetoothModal(false);
+                  onOpenApkTab();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md cursor-pointer flex items-center justify-center space-x-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Get APK Package</span>
               </button>
             </div>
           </div>
